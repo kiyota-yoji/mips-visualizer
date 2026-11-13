@@ -15,6 +15,7 @@ export interface MemAccess {
   base: number; // 番地の計算に使ったレジスタ
   baseValue: number;
   offset: number;
+  old: number; // 書き込む前の値（sw・sh・sb）
 }
 
 export interface BranchInfo {
@@ -32,7 +33,7 @@ export interface ExecInfo {
   nextPc: number;
   reads: RegAccess[];
   writes: { reg: number; old: number; value: number }[];
-  hiLo?: { hi: number; lo: number };
+  hiLo?: { hi: number; lo: number; oldHi: number; oldLo: number; oldInit: boolean };
   mem?: MemAccess;
   branch?: BranchInfo;
   jump?: { target: number; link?: number; viaReg?: number };
@@ -332,7 +333,7 @@ export class Machine {
         this.hi = Number(BigInt.asUintN(32, p >> 32n));
         this.lo = Number(BigInt.asUintN(32, p));
         this.hiLoInit = true;
-        info.hiLo = { hi: this.hi, lo: this.lo };
+        info.hiLo = { hi: this.hi, lo: this.lo, oldHi: this.cur!.hi, oldLo: this.cur!.lo, oldInit: this.cur!.hiLoInit };
         alu('×', a, b, this.lo);
         break;
       }
@@ -355,7 +356,7 @@ export class Machine {
         this.lo = u32(q);
         this.hi = u32(r);
         this.hiLoInit = true;
-        info.hiLo = { hi: this.hi, lo: this.lo };
+        info.hiLo = { hi: this.hi, lo: this.lo, oldHi: this.cur!.hi, oldLo: this.cur!.lo, oldInit: this.cur!.hiLoInit };
         alu('÷', a, b, this.lo);
         break;
       }
@@ -374,7 +375,7 @@ export class Machine {
         if (ins.op === 'lh') v = (v << 16) >> 16;
         if (ins.op === 'lb') v = (v << 24) >> 24;
         alu('+', base, imm, addr);
-        info.mem = { addr, size, value: u32(v), write: false, base: rs, baseValue: base, offset: imm };
+        info.mem = { addr, size, value: u32(v), write: false, base: rs, baseValue: base, offset: imm, old: u32(v) };
         let un = false;
         for (let k = 0; k < size; k++) if (this.memUninit.has(u32(addr + k))) un = true;
         this.w(rt, v, info, !un);
@@ -386,9 +387,11 @@ export class Machine {
         const addr = u32(base + imm);
         const size = ins.op === 'sw' ? 4 : ins.op === 'sh' ? 2 : 1;
         alu('+', base, imm, addr);
+        let old = 0;
+        if (addr % size === 0) for (let k = size - 1; k >= 0; k--) old = old * 256 + this.readByte(addr + k);
         this.store(addr, size, v, ins.line, this.init[rt]);
         const mask = size === 4 ? 0xffffffff : size === 2 ? 0xffff : 0xff;
-        info.mem = { addr, size, value: u32(v & mask), write: true, base: rs, baseValue: base, offset: imm };
+        info.mem = { addr, size, value: u32(v & mask), write: true, base: rs, baseValue: base, offset: imm, old };
         break;
       }
       case 'beq': case 'bne': {

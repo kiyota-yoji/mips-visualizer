@@ -8,7 +8,7 @@ export type Base = 'dec' | 'hex' | 'bin';
 
 export interface ViewState {
   m: Machine;
-  mode: 1 | 2;
+  mode: 1 | 2 | 3;
   base: Base;
   last: ExecInfo[]; // 直前に実行した命令（モード①では1行分）
   expl?: Explanation;
@@ -291,5 +291,6 @@ function mode2(st: ViewState): string {
 }
 
 export function render(st: ViewState): string {
+  if (st.mode === 3) return explCard(st);
   return st.mode === 1 ? mode1(st) : mode2(st);
 }

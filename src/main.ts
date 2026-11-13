@@ -3,6 +3,7 @@ import { type Program, assemble } from './core/assembler';
 import { explain, explainLine } from './core/explain';
 import { type ExecInfo, Machine, RuntimeError, type StepResult } from './core/machine';
 import { LESSON_TITLES, PRESETS } from './presets';
+import { Diagram } from './ui/diagram';
 import { createEditor } from './ui/editor';
 import { type Base, type ViewState, esc, render } from './ui/render';
 
@@ -45,7 +46,7 @@ const SPEEDS = [
 // 状態
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
-let mode: 1 | 2 = 1;
+let mode: 1 | 2 | 3 = 1;
 let prog: Program | null = null;
 let m: Machine | null = null;
 let dirty = true;
@@ -70,6 +71,8 @@ const editor = createEditor($('#editor'), '', () => {
   saveDraft();
 });
 
+const diagram = new Diagram($('#diagram-card'));
+
 function saveDraft() {
   try {
     localStorage.setItem('mipsviz.draft', JSON.stringify({ preset: currentPreset, source: editor.getDoc() }));
@@ -82,6 +85,7 @@ function saveDraft() {
 // 準備・実行
 
 function prepare(): boolean {
+  diagram.skip();
   stopRun();
   hideInput();
   prog = assemble(editor.getDoc());
@@ -120,7 +124,7 @@ function stepGroup(): StepResult & { infos: ExecInfo[] } {
       if (r.info!.instr.part === 0) counts.set(r.info!.instr.line, (counts.get(r.info!.instr.line) ?? 0) + 1);
     }
     if (r.status !== 'ok') break;
-    if (mode === 2) break;
+    if (mode !== 1) break;
     const next = m!.currentInstr();
     if (!next || next.part === 0) break;
   }
@@ -157,14 +161,35 @@ function afterStep(r: StepResult & { infos: ExecInfo[] }): boolean {
   return r.status === 'ok';
 }
 
-function step() {
+/** モード③のアニメーションの速さ（1 で約 3 秒。0 は動かさない） */
+function animSpeed(forStep: boolean): number {
+  const table = [1.5, 0.8, 0.4, 0, 0];
+  const v = table[settings.speed];
+  return forStep && v === 0 ? 0.4 : v;
+}
+
+/** モード③で、直前の命令の動きを見せる */
+async function animateLast(forStep: boolean): Promise<void> {
+  if (mode !== 3 || !m || !last.length) return;
+  const sp = animSpeed(forStep);
+  if (sp <= 0) return;
+  for (const info of last) await diagram.animate(m, info, sp);
+}
+
+async function step() {
+  if (diagram.animating) {
+    diagram.skip(); // 動いている途中なら、すぐに終わらせて次へ
+    await Promise.resolve();
+  }
   if (!ensureReady()) return;
   if (m!.halted) return;
   afterStep(stepGroup());
+  await animateLast(true);
 }
 
 function back() {
   if (!m || dirty) return;
+  diagram.skip();
   stopRun();
   hideInput();
   const undoOne = () => {
@@ -184,7 +209,7 @@ function back() {
   const h = m.history;
   for (let k = h.length - 1; k >= 0; k--) {
     last.unshift(h[k].info);
-    if (mode === 2 || h[k].info.instr.part === 0) break;
+    if (mode !== 1 || h[k].info.instr.part === 0) break;
   }
   status = '1 ステップ戻りました。';
   statusKind = 'info';
@@ -193,7 +218,8 @@ function back() {
 }
 
 function run() {
-  if (runTimer !== null) {
+  if (runTimer !== null || running) {
+    diagram.skip();
     stopRun();
     refresh();
     return;
@@ -235,7 +261,7 @@ function run() {
   }
   $('#btn-run').textContent = '⏸ 止める';
   $('#btn-run').classList.add('running');
-  const tick = () => {
+  const tick = async () => {
     if (hitBreak()) {
       stopRun();
       status = 'ブレークポイントで止まりました。';
@@ -244,13 +270,16 @@ function run() {
     }
     first = false;
     const ok = afterStep(stepGroup());
+    const animated = mode === 3 && animSpeed(false) > 0;
+    if (animated) await animateLast(false);
+    if (!running) return; // 動きの途中で「止める」を押した
     if (!ok) {
       stopRun();
       if (waitingInput) return; // 入力のあとで続ける
       refresh();
       return;
     }
-    runTimer = window.setTimeout(tick, ms);
+    runTimer = window.setTimeout(tick, animated ? 150 : ms);
   };
   runTimer = window.setTimeout(tick, 0);
 }
@@ -295,7 +324,7 @@ $<HTMLFormElement>('#input-form').addEventListener('submit', (e) => {
 // 描画
 
 function refresh(scroll = true) {
-  const view = $('#view');
+  const view = $('#view-main');
   const scrollTops = [...view.querySelectorAll('.scroll')].map((el) => el.scrollTop);
   if (m) {
     const lastIns = last[0];
@@ -303,6 +332,7 @@ function refresh(scroll = true) {
     const expl = last.length ? (mode === 1 ? explainLine(last, m.prog, spBefore) : explain(last[last.length - 1], m.prog, spBefore)) : undefined;
     const st: ViewState = { m, mode, base: mode === 1 ? 'dec' : settings.base, last, expl, status, statusKind };
     view.innerHTML = render(st);
+    if (mode === 3) diagram.show(m, last.at(-1));
   } else {
     view.innerHTML = `<section class="card card-expl"><div class="status status-${statusKind}" role="status">${esc(status).replace(/\n/g, '<br>')}</div>
       ${statusKind === 'error' ? '' : '<p class="muted">左にプログラムを書くか、上の「プログラムを選ぶ」から授業のプログラムを開きます。</p>'}</section>`;
@@ -354,7 +384,7 @@ function openPreset(id: string, opts: { mode?: number; step?: number } = {}) {
   currentPreset = id;
   $<HTMLSelectElement>('#preset').value = id;
   editor.setDoc(p.source);
-  setMode((opts.mode === 1 || opts.mode === 2 ? opts.mode : p.mode) as 1 | 2, false);
+  setMode((opts.mode === 1 || opts.mode === 2 || opts.mode === 3 ? opts.mode : p.mode) as 1 | 2 | 3, false);
   $('#preset-note').textContent = [p.note, p.template ? '課題のひな形です。完成させてから実行します。' : ''].filter(Boolean).join('　');
   prepare();
   if (opts.step) {
@@ -417,10 +447,13 @@ function toast(msg: string) {
 // ------------------------------------------------------------
 // モード・設定
 
-function setMode(n: 1 | 2, re = true) {
+function setMode(n: 1 | 2 | 3, re = true) {
+  diagram.skip();
   mode = n;
   document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.mode) === n)));
-  $('#base-wrap').hidden = n === 1;
+  $('#base-wrap').hidden = n !== 2;
+  $('#diagram-card').hidden = n !== 3;
+  document.body.dataset.mode = String(n);
   if (re) {
     // 戻るときにモード①の区切りに合わせるため、そのまま表示だけ変える
     refresh(false);
@@ -444,7 +477,7 @@ function bind() {
   $('#btn-run').addEventListener('click', run);
   $('#btn-reset').addEventListener('click', () => prepare());
   $('#btn-share').addEventListener('click', share);
-  document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.addEventListener('click', () => setMode(Number(b.dataset.mode) as 1 | 2)));
+  document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.addEventListener('click', () => setMode(Number(b.dataset.mode) as 1 | 2 | 3)));
   $<HTMLSelectElement>('#preset').addEventListener('change', (e) => {
     const id = (e.target as HTMLSelectElement).value;
     if (id) openPreset(id);
@@ -501,7 +534,7 @@ async function init() {
   if (hash.get('code')) {
     try {
       editor.setDoc(await decompress(hash.get('code')!));
-      setMode(qMode === 2 ? 2 : 1, false);
+      setMode(qMode === 2 || qMode === 3 ? qMode : 1, false);
       prepare();
       return;
     } catch {
@@ -515,7 +548,7 @@ async function init() {
       currentPreset = d.preset ?? null;
       if (currentPreset) $<HTMLSelectElement>('#preset').value = currentPreset;
       editor.setDoc(d.source);
-      setMode(qMode === 2 ? 2 : 1, false);
+      setMode(qMode === 2 || qMode === 3 ? qMode : 1, false);
       prepare();
       return;
     }

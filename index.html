@@ -18,6 +18,7 @@
       <div class="modes" role="group" aria-label="表示モード">
         <button data-mode="1" aria-pressed="true" title="レジスタとメモリの値の動きを見る">① かんたん</button>
         <button data-mode="2" aria-pressed="false" title="PC・機械語・番地まで見る">② 命令の中身</button>
+        <button data-mode="3" aria-pressed="false" title="CPU の部品のあいだをデータが動く様子を見る">③ ブロック図</button>
       </div>
     </header>
 
@@ -67,7 +68,10 @@
           </form>
         </section>
       </div>
-      <div id="view" class="right"></div>
+      <div id="view" class="right">
+        <div id="view-main" class="view-main"></div>
+        <section id="diagram-card" class="card dg-card" aria-label="ブロック図" hidden></section>
+      </div>
     </main>
     <div id="toast" class="toast" hidden role="status"></div>
     <script type="module" src="/src/main.ts"></script>

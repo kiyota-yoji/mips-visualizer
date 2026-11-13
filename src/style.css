@@ -43,6 +43,15 @@
   --line-current: #fff3bf;
   --line-error: #ffe3e3;
   --stack-use: #eef4ff;
+  --c-pc: #6d28d9;
+  --c-rom: #1d4ed8;
+  --c-reg: #b91c1c;
+  --c-alu: #4b5563;
+  --c-sel: #ca8a04;
+  --c-mem: #0f766e;
+  --c-io: #0f766e;
+  --c-ctl: #ea580c;
+  --wire: #b6bcc6;
   --fs: 15px;
   color-scheme: light;
 }
@@ -89,6 +98,15 @@
     --line-current: #3b3514;
     --line-error: #4a1f1f;
     --stack-use: #1b2740;
+    --c-pc: #b794ff;
+    --c-rom: #7aa7ff;
+    --c-reg: #ff7b7b;
+    --c-alu: #aab4c3;
+    --c-sel: #f2c14e;
+    --c-mem: #4fd1c5;
+    --c-io: #4fd1c5;
+    --c-ctl: #ff9b5e;
+    --wire: #3b4656;
     color-scheme: dark;
   }
 }
@@ -133,6 +151,15 @@
   --line-current: #3b3514;
   --line-error: #4a1f1f;
   --stack-use: #1b2740;
+  --c-pc: #b794ff;
+  --c-rom: #7aa7ff;
+  --c-reg: #ff7b7b;
+  --c-alu: #aab4c3;
+  --c-sel: #f2c14e;
+  --c-mem: #4fd1c5;
+  --c-io: #4fd1c5;
+  --c-ctl: #ff9b5e;
+  --wire: #3b4656;
   color-scheme: dark;
 }
 :root[data-font='s'] { --fs: 13px; }
@@ -351,6 +378,84 @@ td { padding: 0.15em 0.4em; border-top: 1px solid var(--border); vertical-align:
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 20;
   background: var(--text); color: var(--bg); padding: 0.6em 1em; border-radius: 8px; max-width: calc(100vw - 32px);
 }
+
+/* ---- モード③ ブロック図 ---- */
+body[data-mode='3'] .layout { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); }
+body[data-mode='3'] .editor-card .cm-editor { height: min(52vh, 560px); }
+.view-main { display: grid; gap: 12px; min-width: 0; }
+.dg-card { padding: 0.6em 0.8em 0.8em; }
+.phases { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 0.4em; }
+.phases span {
+  font-size: 0.82em; padding: 0.15em 0.7em; border-radius: 99px;
+  border: 1px solid var(--border); color: var(--muted); transition: all 0.2s;
+}
+.phases span.on { background: var(--write); border-color: var(--write); color: #fff; font-weight: 700; }
+.dg-caption { font-weight: 700; min-height: 1.6em; margin-top: 0.3em; }
+svg.dg { width: 100%; height: auto; display: block; font-family: 'BIZ UDPGothic', 'Hiragino Sans', sans-serif; }
+svg.dg .mono, svg.dg .row-name, svg.dg .row-val { font-family: Menlo, Consolas, monospace; }
+.dg .w { fill: none; stroke: var(--wire); stroke-width: 2; }
+.dg .w-dash { stroke-dasharray: 5 4; }
+.dg .ar-wire { fill: var(--wire); }
+.dg .w-label { font-size: 11px; fill: var(--muted); }
+.dg .blk .blk-bg { fill: var(--surface); stroke: var(--wire); stroke-width: 1.5; transition: fill 0.25s, stroke 0.25s; }
+.dg .blk-title { font-size: 13px; font-weight: 700; text-anchor: middle; fill: var(--muted); }
+.dg .blk-sub { font-size: 10.5px; text-anchor: middle; fill: var(--muted); }
+.dg .blk-val { font-size: 15px; font-weight: 700; text-anchor: middle; fill: var(--text); }
+.dg .alu-res { font-size: 11.5px; }
+.dg .alu-sub { font-size: 9.5px; }
+.dg .io-text { text-anchor: start; font-size: 14px; }
+.dg .c-pc .blk-bg { stroke: var(--c-pc); fill: color-mix(in srgb, var(--c-pc) 8%, var(--surface)); }
+.dg .c-pc .blk-title { fill: var(--c-pc); }
+.dg .c-rom .blk-bg { stroke: var(--c-rom); fill: color-mix(in srgb, var(--c-rom) 6%, var(--surface)); }
+.dg .c-rom .blk-title { fill: var(--c-rom); }
+.dg .c-reg .blk-bg { stroke: var(--c-reg); fill: color-mix(in srgb, var(--c-reg) 5%, var(--surface)); }
+.dg .c-reg .blk-title { fill: var(--c-reg); }
+.dg .c-alu .blk-bg { stroke: var(--c-alu); fill: color-mix(in srgb, var(--c-alu) 8%, var(--surface)); }
+.dg .c-alu .blk-title { fill: var(--text); }
+.dg .c-sel .blk-bg { stroke: var(--c-sel); fill: color-mix(in srgb, var(--c-sel) 18%, var(--surface)); }
+.dg .c-sel .blk-title, .dg .c-sel .blk-sub { fill: var(--text); }
+.dg .c-mem .blk-bg, .dg .c-io .blk-bg { stroke: var(--c-mem); fill: color-mix(in srgb, var(--c-mem) 6%, var(--surface)); }
+.dg .c-mem .blk-title, .dg .c-io .blk-title { fill: var(--c-mem); }
+.dg .blk.lit .blk-bg { stroke-width: 3; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--write) 45%, transparent)); }
+.dg .blk.pulse .blk-bg, .dg rect.pulse { animation: dgpulse 0.5s ease-out; }
+@keyframes dgpulse { 0% { fill: var(--write-bg); } 100% {} }
+.dg .row { fill: var(--surface); stroke: var(--border); }
+.dg .row.rd { fill: var(--read-bg); stroke: var(--read); stroke-width: 2; }
+.dg .row.wr { fill: var(--write-bg); stroke: var(--write); stroke-width: 2; }
+.dg .row-name { font-size: 12.5px; font-weight: 700; fill: var(--c-reg); }
+.dg .row-val { font-size: 12.5px; font-weight: 700; text-anchor: end; fill: var(--text); }
+.dg .row-val.uninit { fill: var(--muted); }
+.dg .im-line, .dg .dm-line { font-size: 11px; fill: var(--text); }
+.dg .im-line.cur { font-weight: 700; }
+.dg .im-addr { fill: var(--muted); }
+.dg .im-cur { fill: var(--line-current); stroke: var(--c-pc); }
+.dg .dm-cur { fill: color-mix(in srgb, var(--c-mem) 18%, var(--surface)); stroke: var(--c-mem); }
+.dg .dec-op { font-size: 20px; font-weight: 700; text-anchor: middle; font-family: Menlo, monospace; }
+.dg .dec-op.g-arith { fill: var(--g-arith); }
+.dg .dec-op.g-mem { fill: var(--g-mem); }
+.dg .dec-op.g-logic, .dg .dec-op.g-compare { fill: var(--g-logic); }
+.dg .dec-op.g-branch, .dg .dec-op.g-jump { fill: var(--g-branch); }
+.dg .dec-op.g-sys { fill: var(--g-sys); }
+.dg .dec-line { font-size: 11.5px; fill: var(--text); }
+/* 動く線と札 */
+.dg .trail { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
+.dg .t-pc { stroke: var(--c-pc); } .dg .ar-pc { fill: var(--c-pc); }
+.dg .t-rom { stroke: var(--c-rom); } .dg .ar-rom { fill: var(--c-rom); }
+.dg .t-reg { stroke: var(--c-reg); } .dg .ar-reg { fill: var(--c-reg); }
+.dg .t-alu { stroke: var(--c-alu); } .dg .ar-alu { fill: var(--c-alu); }
+.dg .t-sel { stroke: var(--c-sel); } .dg .ar-sel { fill: var(--c-sel); }
+.dg .t-mem, .dg .t-io { stroke: var(--c-mem); } .dg .ar-mem, .dg .ar-io { fill: var(--c-mem); }
+.dg .t-ctl { stroke: var(--c-ctl); stroke-dasharray: 7 5; } .dg .ar-ctl { fill: var(--c-ctl); }
+.dg .chip rect { stroke: #fff; stroke-width: 1.5; filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.3)); }
+.dg .chip text { font: 700 12px Menlo, Consolas, monospace; text-anchor: middle; fill: #fff; }
+.dg .k-pc rect { fill: var(--c-pc); }
+.dg .k-rom rect { fill: var(--c-rom); }
+.dg .k-reg rect { fill: var(--c-reg); }
+.dg .k-alu rect { fill: #374151; }
+.dg .k-sel rect { fill: var(--c-sel); }
+.dg .k-mem rect, .dg .k-io rect { fill: var(--c-mem); }
+.dg .k-ctl rect { fill: var(--c-ctl); }
+@media (prefers-reduced-motion: reduce) { .dg .blk.pulse .blk-bg { animation: none; } }
 
 /* ---- 狭い画面 ---- */
 @media (max-width: 900px) {
