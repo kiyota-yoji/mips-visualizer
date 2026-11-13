@@ -2,7 +2,7 @@
 import { history, defaultKeymap, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language';
 import { EditorState, RangeSet, StateEffect, StateField } from '@codemirror/state';
-import { Decoration, type DecorationSet, EditorView, GutterMarker, gutter, keymap, lineNumbers } from '@codemirror/view';
+import { Decoration, type DecorationSet, EditorView, GutterMarker, drawSelection, gutter, highlightActiveLine, keymap, lineNumbers } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
 import { OPS, PSEUDO_OPS } from '../core/defs';
 
@@ -164,6 +164,8 @@ export function createEditor(parent: HTMLElement, doc: string, onChange: () => v
         }),
         gutter({ class: 'cm-count-gutter', markers: (v) => v.state.field(countField), initialSpacer: () => new CountMarker(99, 99) }),
         history(),
+        drawSelection({ cursorBlinkRate: 1000 }), // 太くて見えやすいカーソルを自分で描く
+        highlightActiveLine(),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         mips,
         syntaxHighlighting(highlight),

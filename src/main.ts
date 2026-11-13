@@ -5,6 +5,7 @@ import { type ExecInfo, Machine, RuntimeError, type StepResult } from './core/ma
 import { LESSON_TITLES, PRESETS } from './presets';
 import { Diagram } from './ui/diagram';
 import { createEditor } from './ui/editor';
+import { installValueTooltip } from './ui/tooltip';
 import { type Base, type ViewState, esc, render } from './ui/render';
 
 // ------------------------------------------------------------
@@ -72,6 +73,7 @@ const editor = createEditor($('#editor'), '', () => {
 });
 
 const diagram = new Diagram($('#diagram-card'));
+installValueTooltip();
 
 function saveDraft() {
   try {

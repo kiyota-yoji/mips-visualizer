@@ -244,10 +244,12 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .cm-editor .cm-gutters { background: var(--surface-2); color: var(--muted); border-right: 1px solid var(--border); }
 .cm-editor .cm-lineNumbers .cm-gutterElement { cursor: pointer; }
 .cm-editor.cm-focused { outline: none; }
-.cm-editor .cm-cursor { border-left-color: var(--text); }
+.cm-editor .cm-content { caret-color: var(--text); }
+.cm-editor .cm-cursor, .cm-editor .cm-dropCursor { border-left: 2.5px solid var(--write); margin-left: -1px; }
+.cm-editor .cm-activeLine { background: color-mix(in srgb, var(--write) 7%, transparent); }
 .cm-editor .cm-selectionBackground, .cm-editor.cm-focused .cm-selectionBackground { background: var(--read-bg) !important; }
-.cm-mark-current { background: var(--line-current); box-shadow: inset 4px 0 0 var(--write); }
-.cm-mark-error { background: var(--line-error); box-shadow: inset 4px 0 0 var(--err); }
+.cm-editor .cm-line.cm-mark-current { background: var(--line-current); box-shadow: inset 4px 0 0 var(--write); }
+.cm-editor .cm-line.cm-mark-error { background: var(--line-error); box-shadow: inset 4px 0 0 var(--err); }
 .cm-bp-gutter .cm-gutterElement { width: 1.1em; cursor: pointer; text-align: center; }
 .cm-bp { color: var(--err); font-size: 0.8em; }
 .cm-count-gutter .cm-gutterElement { min-width: 3.2em; text-align: right; padding-right: 4px; }
@@ -455,7 +457,44 @@ svg.dg .mono, svg.dg .row-name, svg.dg .row-val { font-family: Menlo, Consolas, 
 .dg .k-sel rect { fill: var(--c-sel); }
 .dg .k-mem rect, .dg .k-io rect { fill: var(--c-mem); }
 .dg .k-ctl rect { fill: var(--c-ctl); }
+/* 着いた札は残す。前の段階の札は薄くする */
+.dg .chip-in { transition: transform 0.25s, opacity 0.25s; }
+.dg .chip.landed .chip-in { transform: scale(0.9); }
+.dg .chip.old { opacity: 0.45; }
+.dg .chip.old:hover { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .dg .blk.pulse .blk-bg { animation: none; } }
+
+/* データ領域・スタック領域（SVG の中の HTML の表。スクロールできる） */
+.dg foreignObject { overflow: hidden; }
+.dm-scroll {
+  position: relative; height: 100%; overflow-y: auto; overscroll-behavior: contain;
+  font: 11.5px/1.25 Menlo, Consolas, monospace; color: var(--text);
+  border-top: 1px solid var(--border); scrollbar-width: thin;
+}
+.dm-row { display: grid; grid-template-columns: 5.6em 1fr; column-gap: 0.4em; padding: 2px 4px; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.dm-a { color: var(--muted); font-size: 10.5px; align-self: center; }
+.dm-v { font-weight: 700; text-align: right; cursor: help; }
+.dm-v.dm-empty { color: var(--muted); font-weight: 400; cursor: default; }
+.dm-n { grid-column: 1 / -1; font: 10px/1.2 'BIZ UDPGothic', 'Hiragino Sans', sans-serif; color: var(--c-mem); }
+.dm-n:empty { display: none; }
+.dm-lbl .dm-n { font-weight: 700; }
+.dm-free { opacity: 0.55; }
+.dm-use { background: color-mix(in srgb, var(--c-mem) 7%, transparent); }
+.dm-row.dm-cur { background: color-mix(in srgb, var(--c-mem) 22%, var(--surface)); outline: 2px solid var(--c-mem); outline-offset: -2px; border-radius: 3px; }
+.dm-none { color: var(--muted); padding: 0.5em; font-family: sans-serif; }
+.dg .row-val[data-v], .dg .row[data-v] { cursor: help; }
+
+/* 値のポップアップ（10進・16進・2進） */
+[data-v] { cursor: help; }
+.vtip {
+  position: fixed; z-index: 50; pointer-events: none;
+  background: var(--text); color: var(--bg); border-radius: 8px; padding: 0.45em 0.7em;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.25); font-size: 13px;
+}
+.vtip table { border-collapse: collapse; }
+.vtip th { text-align: left; font-weight: 700; padding: 1px 0.8em 1px 0; opacity: 0.75; white-space: nowrap; }
+.vtip td { font-family: Menlo, Consolas, monospace; white-space: nowrap; }
+.vtip-note { font-size: 11px; opacity: 0.65; margin-top: 2px; }
 
 /* ---- 狭い画面 ---- */
 @media (max-width: 900px) {

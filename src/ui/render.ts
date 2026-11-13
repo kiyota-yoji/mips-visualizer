@@ -26,6 +26,9 @@ export function fmt(v: number, base: Base): string {
 
 const R = (i: number) => '$' + REG_NAMES[i];
 
+/** ポップアップ（2進・16進）用の属性 */
+const dv = (v: number, bits = 32) => ` data-v="${v >>> 0}"${bits !== 32 ? ` data-bits="${bits}"` : ''}`;
+
 function groupOf(op: string): string {
   return OPS[op]?.group ?? 'sys';
 }
@@ -95,7 +98,7 @@ function regBoxes(st: ViewState, regs: number[], base: Base): string {
       const isAddr = [28, 29, 30, 31].includes(i) || (m.regs[i] >= 0x00400000 && m.regs[i] < 0x80000000 && (m.regs[i] & 3) === 0 && m.regs[i] > 0x00400000);
       const v = m.init[i] ? (isAddr && base === 'dec' ? hex(m.regs[i]) : fmt(m.regs[i], base)) : '？';
       return `<div class="reg ${cls} ${m.init[i] ? '' : 'uninit'}" title="${esc(REG_ROLE[REG_NAMES[i]] ?? '')}">
-        <div class="reg-name">${R(i)}</div><div class="reg-val ${isAddr && m.init[i] ? 'addr' : ''}">${esc(v)}</div><div class="reg-role">${esc(REG_ROLE[REG_NAMES[i]] ?? '')}${isAddr && m.init[i] && ![28, 29, 30, 31].includes(i) ? '（番地）' : ''}</div></div>`;
+        <div class="reg-name">${R(i)}</div><div class="reg-val ${isAddr && m.init[i] ? 'addr' : ''}"${m.init[i] ? dv(m.regs[i]) : ''}>${esc(v)}</div><div class="reg-role">${esc(REG_ROLE[REG_NAMES[i]] ?? '')}${isAddr && m.init[i] && ![28, 29, 30, 31].includes(i) ? '（番地）' : ''}</div></div>`;
     })
     .join('');
 }
@@ -111,7 +114,7 @@ function dataVar(st: ViewState, d: DataLabel, memAddrs: Map<number, 'r' | 'w'>):
       for (let b = unit - 1; b >= 0; b--) v = v * 256 + m.readByte(a + b);
       const sv = unit === 4 ? s32(v) : (v << 16) >> 16;
       const acc = memAddrs.get(a) ?? '';
-      cells.push(`<div class="cell ${acc}"><div class="cell-i">[${k}]</div><div class="cell-v">${sv}</div></div>`);
+      cells.push(`<div class="cell ${acc}"><div class="cell-i">[${k}]</div><div class="cell-v"${dv(v, unit * 8)}>${sv}</div></div>`);
     }
   } else {
     const n = d.kind === 'asciiz' ? d.count + 1 : d.size;
@@ -120,17 +123,15 @@ function dataVar(st: ViewState, d: DataLabel, memAddrs: Map<number, 'r' | 'w'>):
       const b = m.readByte(a);
       const acc = memAddrs.get(a) ?? '';
       const ch = b === 0 ? '\\0' : b === 10 ? '\\n' : b >= 32 && b < 127 ? String.fromCharCode(b) : String(b);
-      cells.push(`<div class="cell byte ${acc} ${b === 0 ? 'nul' : ''}"><div class="cell-i">${k}</div><div class="cell-v">${esc(ch)}</div></div>`);
+      cells.push(`<div class="cell byte ${acc} ${b === 0 ? 'nul' : ''}"><div class="cell-i">${k}</div><div class="cell-v"${dv(b, 8)}>${esc(ch)}</div></div>`);
     }
   }
   const kind = { word: '.word（1つ 4 バイト）', half: '.half（1つ 2 バイト）', byte: '.byte', ascii: '.ascii（1文字 1 バイト）', asciiz: '.asciiz（1文字 1 バイト＋最後に 0）', space: '.space' }[d.kind];
   return `<div class="var"><div class="var-head"><b>${esc(d.name)}</b><span>${kind}・${d.size} バイト・番地 ${hex(d.addr)}</span></div><div class="cells">${cells.join('')}</div></div>`;
 }
 
-/** スタックの行（sw で退避したレジスタの名前を付ける） */
-function stackRows(st: ViewState) {
-  const m = st.m;
-  const sp = m.regs[29];
+/** スタックの行（sw で退避したレジスタの名前を付ける）。minRows 行は必ず出す */
+export function stackRowsOf(m: Machine, sp = m.regs[29], minRows = 0) {
   const saved = new Map<number, string>();
   for (const h of m.history) {
     const mm = h.info.mem;
@@ -139,15 +140,15 @@ function stackRows(st: ViewState) {
   let low = sp;
   for (const a of saved.keys()) low = Math.min(low, a);
   const rows: { addr: number; value: number; inUse: boolean; isSp: boolean; saved?: string }[] = [];
-  if (low >= STACK_TOP && saved.size === 0) return { rows, sp };
-  for (let a = STACK_TOP; a >= low - 8 && rows.length < 24; a -= 4) {
+  if (low >= STACK_TOP && saved.size === 0 && minRows === 0) return { rows, sp };
+  for (let a = STACK_TOP; (a >= low - 8 || rows.length < minRows) && rows.length < 256; a -= 4) {
     rows.push({ addr: a, value: m.readWord(a), inUse: a >= sp && a < STACK_TOP, isSp: a === sp, saved: saved.get(a) });
   }
   return { rows, sp };
 }
 
 function stackView(st: ViewState, base: Base): string {
-  const { rows, sp } = stackRows(st);
+  const { rows, sp } = stackRowsOf(st.m);
   const { memAddrs } = touched(st);
   const used = (STACK_TOP - sp) | 0;
   const head = `<h3>スタック <small>$sp ＝ ${hex(sp)}${used > 0 ? `（最初より ${used} バイト ＝ ${used / 4} ワード下）` : '（最初の位置）'}</small></h3>`;
@@ -157,7 +158,7 @@ function stackView(st: ViewState, base: Base): string {
       const acc = memAddrs.get(r.addr) ?? '';
       return `<tr class="${r.inUse ? 'inuse' : 'free'} ${acc}">
         <td class="mono">${hex(r.addr)}</td>
-        <td class="mono">${r.inUse || r.saved ? esc(r.saved === '$ra' || r.saved === '$fp' ? hex(r.value) : fmt(r.value, base)) : ''}</td>
+        <td class="mono"${r.inUse || r.saved ? dv(r.value) : ''}>${r.inUse || r.saved ? esc(r.saved === '$ra' || r.saved === '$fp' ? hex(r.value) : fmt(r.value, base)) : ''}</td>
         <td>${r.saved && r.inUse ? `${esc(r.saved)} を退避` : ''}</td>
         <td class="sp">${r.isSp ? '← $sp' : r.addr === STACK_TOP ? '最初の $sp' : ''}</td></tr>`;
     })
@@ -244,9 +245,9 @@ function regGrid(st: ViewState): string {
   const m = st.m;
   const cells = REG_NAMES.map((n, i) => {
     const cls = writes.has(i) ? 'w' : reads.has(i) ? 'r' : '';
-    return `<div class="rg ${cls} ${m.init[i] ? '' : 'uninit'}" title="${esc(REG_ROLE[n] ?? '')}"><span class="rg-n">$${n}<small>${i}</small></span><span class="rg-v mono">${m.init[i] ? esc(fmt(m.regs[i], st.base === 'dec' && i >= 28 ? 'hex' : st.base)) : '—'}</span></div>`;
+    return `<div class="rg ${cls} ${m.init[i] ? '' : 'uninit'}" title="${esc(REG_ROLE[n] ?? '')}"><span class="rg-n">$${n}<small>${i}</small></span><span class="rg-v mono"${m.init[i] ? dv(m.regs[i]) : ''}>${m.init[i] ? esc(fmt(m.regs[i], st.base === 'dec' && i >= 28 ? 'hex' : st.base)) : '—'}</span></div>`;
   }).join('');
-  const hl = (name: string, v: number) => `<div class="rg ${m.hiLoInit ? '' : 'uninit'} ${st.last.some((i) => i.hiLo) ? 'w' : ''}"><span class="rg-n">${name}</span><span class="rg-v mono">${m.hiLoInit ? esc(fmt(v, st.base)) : '—'}</span></div>`;
+  const hl = (name: string, v: number) => `<div class="rg ${m.hiLoInit ? '' : 'uninit'} ${st.last.some((i) => i.hiLo) ? 'w' : ''}"><span class="rg-n">${name}</span><span class="rg-v mono"${m.hiLoInit ? dv(v) : ''}>${m.hiLoInit ? esc(fmt(v, st.base)) : '—'}</span></div>`;
   return `<section class="card"><h3>レジスタ</h3><div class="reggrid ${st.base === 'bin' ? 'bin' : ''}">${cells}${hl('HI', m.hi)}${hl('LO', m.lo)}</div>
     <p class="legend"><span class="lg lg-r"></span>読んだ <span class="lg lg-w"></span>書いた　— はまだ値が入っていない</p></section>`;
 }
@@ -268,11 +269,11 @@ function dataMemory(st: ViewState): string {
       const b = m.readByte(a + k);
       const acc = memAddrs.get(a + k) ?? '';
       const ch = b >= 32 && b < 127 ? String.fromCharCode(b) : b === 0 ? '\\0' : '·';
-      return `<td class="byte ${acc}"><span class="mono">${b.toString(16).padStart(2, '0')}</span><small>${esc(ch)}</small></td>`;
+      return `<td class="byte ${acc}"${dv(b, 8)}><span class="mono">${b.toString(16).padStart(2, '0')}</span><small>${esc(ch)}</small></td>`;
     });
     const names = (labelAt.get(a) ?? []).join(', ');
     const nm = nameAddr(m.prog, a);
-    rows.push(`<tr><td class="mono">${hex(a)}</td>${bytes.join('')}<td class="mono">${esc(fmt(m.readWord(a), st.base))}</td><td>${names ? `<b>${esc(names)}</b>` : `<span class="muted">${esc(nm)}</span>`}</td></tr>`);
+    rows.push(`<tr><td class="mono">${hex(a)}</td>${bytes.join('')}<td class="mono"${dv(m.readWord(a))}>${esc(fmt(m.readWord(a), st.base))}</td><td>${names ? `<b>${esc(names)}</b>` : `<span class="muted">${esc(nm)}</span>`}</td></tr>`);
   }
   return `<section class="card"><h3>データメモリ <small>（1 マス ＝ 1 バイト。下の小さい字は文字として読んだもの）</small></h3>
     <div class="scroll"><table class="datamem"><thead><tr><th>番地</th><th>+0</th><th>+1</th><th>+2</th><th>+3</th><th>ワードとして読むと</th><th>ラベル</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
