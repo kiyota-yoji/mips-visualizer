@@ -465,9 +465,10 @@ svg.dg .mono, svg.dg .row-name, svg.dg .row-val { font-family: Menlo, Consolas, 
 @media (prefers-reduced-motion: reduce) { .dg .blk.pulse .blk-bg { animation: none; } }
 
 /* データ領域・スタック領域（SVG の中の HTML の表。スクロールできる） */
-.dg foreignObject { overflow: hidden; }
+.dg-wrap { position: relative; overflow: hidden; }
+.dg-over { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
 .dm-scroll {
-  position: relative; height: 100%; overflow-y: auto; overscroll-behavior: contain;
+  position: absolute; box-sizing: border-box; pointer-events: auto; overflow-y: auto; overscroll-behavior: contain;
   font: 11.5px/1.25 Menlo, Consolas, monospace; color: var(--text);
   border-top: 1px solid var(--border); scrollbar-width: thin;
 }

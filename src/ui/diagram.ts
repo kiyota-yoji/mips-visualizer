@@ -8,7 +8,6 @@ import { nameAddr } from '../core/explain';
 const NS = 'http://www.w3.org/2000/svg';
 const W = 1030;
 const H = 640;
-const XHTML = 'http://www.w3.org/1999/xhtml';
 
 type Pt = [number, number];
 
@@ -114,7 +113,9 @@ const PHASES = ['① 命令を読む', '② 解読する', '③ 計算する', '
 
 export class Diagram {
   readonly root: HTMLElement;
-  private svg!: SVGSVGElement;
+  private wrap: HTMLDivElement | null = null;
+  private over!: HTMLDivElement;
+  private resizeObs: ResizeObserver | null = null;
   private wiresLayer!: SVGGElement;
   private activeLayer!: SVGGElement;
   private chipLayer!: SVGGElement;
@@ -153,10 +154,26 @@ export class Diagram {
   setProgram(prog: Program) {
     if (this.prog === prog) return;
     this.prog = prog;
-    this.svg?.remove();
+    this.wrap?.remove();
+    this.resizeObs?.disconnect();
+    // SVG の上に HTML の層（メモリの表）を重ねる。Safari は foreignObject の中身の位置がずれるため使わない
+    const wrap = document.createElement('div');
+    wrap.className = 'dg-wrap';
+    this.wrap = wrap;
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dg', role: 'img', 'aria-label': 'CPU のブロック図' });
-    this.svg = svg;
-    this.root.insertBefore(svg, this.caption);
+    const over = document.createElement('div');
+    over.className = 'dg-over';
+    over.style.width = `${W}px`;
+    over.style.height = `${H}px`;
+    this.over = over;
+    wrap.append(svg, over);
+    this.root.insertBefore(wrap, this.caption);
+    const fit = () => { over.style.transform = `scale(${wrap.clientWidth / W})`; };
+    fit();
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObs = new ResizeObserver(fit);
+      this.resizeObs.observe(wrap);
+    }
     const defs = el('defs', {}, svg);
     for (const c of ['wire', 'pc', 'rom', 'reg', 'alu', 'sel', 'mem', 'io', 'ctl']) {
       const mk = el('marker', { id: `ar-${c}`, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
@@ -235,10 +252,11 @@ export class Diagram {
     const memArea = (key: Area, title: string, sub: string) => {
       const r = AREA[key].r;
       const g = block(key, r, 'mem', title, sub);
-      const fo = el('foreignObject', { x: r.x + 5, y: r.y + 40, width: r.w - 10, height: r.h - 45 }, g);
-      const div = document.createElementNS(XHTML, 'div') as HTMLDivElement;
+      void g;
+      const div = document.createElement('div');
       div.className = 'dm-scroll';
-      fo.appendChild(div);
+      Object.assign(div.style, { left: `${r.x + 5}px`, top: `${r.y + 40}px`, width: `${r.w - 10}px`, height: `${r.h - 45}px` });
+      this.over.appendChild(div);
       this.memList.set(key, div);
     };
     memArea('data', 'データ領域（.data）', 'メモリ ・ 1 行 ＝ 4 バイト');
