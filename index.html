@@ -19,6 +19,7 @@
         <button data-mode="1" aria-pressed="true" title="レジスタとメモリの値の動きを見る">① かんたん</button>
         <button data-mode="2" aria-pressed="false" title="PC・機械語・番地まで見る">② 命令の中身</button>
         <button data-mode="3" aria-pressed="false" title="CPU の部品のあいだをデータが動く様子を見る">③ ブロック図</button>
+        <button data-mode="4" aria-pressed="false" title="C のプログラムが、コンパイラ・アセンブラ・リンカを通って機械語になるまでを見る">④ C から機械語へ</button>
       </div>
     </header>
 
@@ -73,6 +74,7 @@
         <section id="diagram-card" class="card dg-card" aria-label="ブロック図" hidden></section>
       </div>
     </main>
+    <main id="cc-view" class="cc" hidden></main>
     <div id="toast" class="toast" hidden role="status"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

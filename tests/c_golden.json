@@ -1,0 +1,12 @@
+{
+  "preset:c01-arith": "f = 2\n",
+  "preset:c02-max": "12\n-3\n",
+  "preset:c03-loop": "for: 55\nwhile: 55\n",
+  "preset:c04-array": "合計 = 14\n",
+  "preset:c05-link": "15\n",
+  "preset:c06-sort": "1 2 3 4 5 7 8 9 \n",
+  "preset:c07-fact": "5! = 120\n",
+  "preset:c08-gcd": "gcd(48, 18) = 6\n",
+  "preset:c09-chars": "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n'A' = 65\n",
+  "test:misc1": "9 10 11 6 0\ng=9 cnt=26\n0 12 6\n35\n55 64\n-3 -2 3 -85\n1 0 1 0 1 1\n1 0 0 0\n2 7 5 -7 16\n-8 20\n3 13 6\n243 ok\n"
+}

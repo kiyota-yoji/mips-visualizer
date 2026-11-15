@@ -3,6 +3,9 @@ import { type Program, assemble } from './core/assembler';
 import { explain, explainLine } from './core/explain';
 import { type ExecInfo, Machine, RuntimeError, type StepResult } from './core/machine';
 import { LESSON_TITLES, PRESETS } from './presets';
+import { CPRESETS, type Stage } from './cpresets';
+import type { SourceFile } from './compiler/pipeline';
+import { CcView } from './ui/ccview';
 import { Diagram } from './ui/diagram';
 import { createEditor } from './ui/editor';
 import { installValueTooltip } from './ui/tooltip';
@@ -59,6 +62,8 @@ let errorLine: number | null = null;
 let runTimer: number | null = null;
 let waitingInput = false;
 let currentPreset: string | null = null;
+let ccOn = false; // モード④（C から機械語へ）を表示中
+let fromC = false; // エディターのプログラムが C から作ったもの
 
 const editor = createEditor($('#editor'), '', () => {
   dirty = true;
@@ -74,6 +79,24 @@ const editor = createEditor($('#editor'), '', () => {
 
 const diagram = new Diagram($('#diagram-card'));
 installValueTooltip();
+const cc = new CcView($('#cc-view'), {
+  run: (source, n) => loadCompiled(source, n),
+  toast: (msg) => toast(msg),
+  changed: () => {},
+});
+
+/** C から作ったアセンブリをエディターに入れて動かす */
+function loadCompiled(source: string, n: 1 | 2 | 3) {
+  stopRun();
+  editor.setDoc(source);
+  currentPreset = null;
+  $<HTMLSelectElement>('#preset').value = '';
+  $('#preset-note').textContent = 'C から作ったプログラム（④ C から機械語へ に戻ると C を直せます）';
+  fromC = true;
+  setMode(n, false);
+  prepare();
+  toast('C から作った実行ファイルを読みこみました。「1ステップ」で動かします。');
+}
 
 function saveDraft() {
   try {
@@ -103,7 +126,8 @@ function prepare(): boolean {
     refresh();
     return false;
   }
-  m = new Machine(prog, { strictUninit: settings.strict });
+  // C から作ったプログラムは、退避のために値を入れていない $s をスタックに書くので、止めない
+  m = new Machine(prog, { strictUninit: settings.strict && !fromC });
   status = '準備ができました。「1ステップ」で 1 命令ずつ、「実行」で続けて実行します。';
   statusKind = 'info';
   refresh();
@@ -384,6 +408,7 @@ function openPreset(id: string, opts: { mode?: number; step?: number } = {}) {
   const p = PRESETS.find((x) => x.id === id);
   if (!p) return false;
   currentPreset = id;
+  fromC = false;
   $<HTMLSelectElement>('#preset').value = id;
   editor.setDoc(p.source);
   setMode((opts.mode === 1 || opts.mode === 2 || opts.mode === 3 ? opts.mode : p.mode) as 1 | 2 | 3, false);
@@ -421,6 +446,20 @@ async function share() {
   const url = new URL(location.href);
   url.search = '';
   url.hash = '';
+  if (ccOn) {
+    const st = cc.shareState();
+    if (st.preset) url.searchParams.set('cpreset', st.preset);
+    else url.hash = 'cfiles=' + (await compress(JSON.stringify(st.files)));
+    url.searchParams.set('mode', '4');
+    url.searchParams.set('stage', st.stage);
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      toast('リンクをコピーしました。このリンクを開くと、同じ C のプログラムが開きます。');
+    } catch {
+      prompt('このリンクをコピーしてください', url.toString());
+    }
+    return;
+  }
   const p = PRESETS.find((x) => x.id === currentPreset);
   const doc = editor.getDoc();
   if (p && p.source === doc) {
@@ -449,10 +488,18 @@ function toast(msg: string) {
 // ------------------------------------------------------------
 // モード・設定
 
-function setMode(n: 1 | 2 | 3, re = true) {
+function setMode(n: 1 | 2 | 3 | 4, re = true) {
   diagram.skip();
-  mode = n;
   document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.mode) === n)));
+  ccOn = n === 4;
+  $('#cc-view').hidden = !ccOn;
+  if (n === 4) {
+    stopRun();
+    document.body.dataset.mode = '4';
+    cc.shown();
+    return;
+  }
+  mode = n;
   $('#base-wrap').hidden = n !== 2;
   $('#diagram-card').hidden = n !== 3;
   document.body.dataset.mode = String(n);
@@ -479,7 +526,7 @@ function bind() {
   $('#btn-run').addEventListener('click', run);
   $('#btn-reset').addEventListener('click', () => prepare());
   $('#btn-share').addEventListener('click', share);
-  document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.addEventListener('click', () => setMode(Number(b.dataset.mode) as 1 | 2 | 3)));
+  document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.addEventListener('click', () => setMode(Number(b.dataset.mode) as 1 | 2 | 3 | 4)));
   $<HTMLSelectElement>('#preset').addEventListener('change', (e) => {
     const id = (e.target as HTMLSelectElement).value;
     if (id) openPreset(id);
@@ -513,6 +560,7 @@ function bind() {
     refresh(false);
   });
   document.addEventListener('keydown', (e) => {
+    if (ccOn) return;
     if (e.key === 'F8' && !e.shiftKey) {
       e.preventDefault();
       step();
@@ -530,6 +578,25 @@ async function init() {
   fillPresets();
   bind();
   applySettings();
+  await initAsm();
+  // モード④（C）のリンク
+  const q = new URLSearchParams(location.search);
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const stage = (q.get('stage') ?? undefined) as Stage | undefined;
+  if (hash.get('cfiles')) {
+    try {
+      cc.loadFiles(JSON.parse(await decompress(hash.get('cfiles')!)) as SourceFile[], stage);
+      setMode(4);
+    } catch {
+      toast('リンクの C のプログラムを読めませんでした。');
+    }
+  } else if (q.get('cpreset') && CPRESETS.some((p) => p.id === q.get('cpreset'))) {
+    cc.openPreset(q.get('cpreset')!, stage);
+    setMode(4);
+  } else if (q.get('mode') === '4') setMode(4);
+}
+
+async function initAsm() {
   const q = new URLSearchParams(location.search);
   const qMode = Number(q.get('mode')) || undefined;
   const hash = new URLSearchParams(location.hash.slice(1));
